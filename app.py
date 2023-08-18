@@ -357,7 +357,7 @@ def perform_address_search(search_data):
     return []
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)  # 디버깅 모드 활성화
+    app.run(host="0.0.0.0", port=8000, timeout=1200)  
 
 
 
