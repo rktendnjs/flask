@@ -333,6 +333,20 @@ def search():
 
 
 
+# 세션 생성
+session = requests.Session()
+
+# Retry 객체 생성
+retry = Retry(total=5, backoff_factor=0.5, status_forcelist=[ 500, 502, 503, 504 ])
+
+# HTTPAdapter 생성 및 Retry 객체 할당
+adapter = HTTPAdapter(max_retries=retry)
+
+# 세션에 HTTPAdapter 할당
+session.mount('http://', adapter)
+session.mount('https://', adapter)
+
+# perform_address_search 함수 내에서 세션 사용
 def perform_address_search(search_data):
     api_key = 'devU01TX0FVVEgyMDIzMDcyODE1MzkzNzExMzk3MzA='
     base_url = 'http://www.juso.go.kr/addrlink/addrLinkApi.do'
@@ -345,30 +359,16 @@ def perform_address_search(search_data):
         'keyword': search_data,
     }
 
-    # Create a custom session with retry and timeout settings
-    session = requests.Session()
-    retry_strategy = Retry(
-        total=3,  # Number of retries
-        backoff_factor=1,  # Exponential backoff factor
-        status_forcelist=[500, 502, 503, 504],  # HTTP status codes to retry
-        allowed_methods=["HEAD", "GET", "OPTIONS"]  # Allowed HTTP methods for retry
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
+    response = session.get(base_url, params=payload)
 
-    try:
-        response = session.get(base_url, params=payload, timeout=1200)  # Timeout setting
-        response.raise_for_status()  # Raise an exception for HTTP errors (4xx and 5xx)
+    if response.status_code == 200:
         search_result = response.json()
-
         if 'results' in search_result and 'juso' in search_result['results']:
             result_data = search_result['results']['juso']
             if result_data:
                 # Extract and return the road addresses from the API response
                 return [result.get('roadAddr', '') for result in result_data]
-    except requests.exceptions.RequestException as e:
-        print("Error:", e)  # Handle connection errors or HTTP errors
+
     return []
 
 if __name__ == "__main__":
