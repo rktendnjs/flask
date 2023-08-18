@@ -2,6 +2,8 @@ import re
 import pandas as pd
 import requests
 from flask import Flask, jsonify, request
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 app = Flask(__name__)
 
@@ -329,7 +331,13 @@ def search():
         response_data = {'HEADER': {'RESULT_CODE': 'F', 'RESULT_MSG': str(e)}}
         return jsonify(response_data)
 
-
+# Function to create a session with custom retry and timeout settings
+def create_session():
+    session = requests.Session()
+    retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[ 500, 502, 503, 504 ])
+    session.mount('http://', HTTPAdapter(max_retries=retries))
+    session.mount('https://', HTTPAdapter(max_retries=retries))
+    return session
 
 
 def perform_address_search(search_data):
@@ -344,15 +352,19 @@ def perform_address_search(search_data):
         'keyword': search_data,
     }
 
-    response = requests.get(base_url, params=payload)
+    session = create_session()
 
-    if response.status_code == 200:
-        search_result = response.json()
-        if 'results' in search_result and 'juso' in search_result['results']:
-            result_data = search_result['results']['juso']
-            if result_data:
-                # Extract and return the road addresses from the API response
-                return [result.get('roadAddr', '') for result in result_data]
+    try:
+        response = session.get(base_url, params=payload, timeout=1200)
+        if response.status_code == 200:
+            search_result = response.json()
+            if 'results' in search_result and 'juso' in search_result['results']:
+                result_data = search_result['results']['juso']
+                if result_data:
+                    # Extract and return the road addresses from the API response
+                    return [result.get('roadAddr', '') for result in result_data]
+    except Exception as e:
+        print("An error occurred:", e)
 
     return []
 
