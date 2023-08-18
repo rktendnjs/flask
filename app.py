@@ -358,7 +358,7 @@ def perform_address_search(search_data):
     session.mount("https://", adapter)
 
     try:
-        response = session.get(base_url, params=payload, timeout=120)  # Timeout setting
+        response = session.get(base_url, params=payload, timeout=1200)  # Timeout setting
         response.raise_for_status()  # Raise an exception for HTTP errors (4xx and 5xx)
         search_result = response.json()
 
