@@ -136,7 +136,7 @@ def convert_hybrid_words(text):
 
 # Load data from the other Excel file (contains the mapping)
 mapping_file = 'data.csv'
-mapping_df = pd.read_excel(mapping_file)
+mapping_df = pd.read_csv(mapping_file)
 
 # Create a dictionary mapping English words to Korean words
 mapping_dict = dict(zip(mapping_df['로마자표기'], mapping_df['한글']))
