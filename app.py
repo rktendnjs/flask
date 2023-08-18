@@ -333,20 +333,6 @@ def search():
 
 
 
-# 세션 생성
-session = requests.Session()
-
-# Retry 객체 생성
-retry = Retry(total=5, backoff_factor=0.5, status_forcelist=[ 500, 502, 503, 504 ])
-
-# HTTPAdapter 생성 및 Retry 객체 할당
-adapter = HTTPAdapter(max_retries=retry)
-
-# 세션에 HTTPAdapter 할당
-session.mount('http://', adapter)
-session.mount('https://', adapter)
-
-# perform_address_search 함수 내에서 세션 사용
 def perform_address_search(search_data):
     api_key = 'devU01TX0FVVEgyMDIzMDcyODE1MzkzNzExMzk3MzA='
     base_url = 'http://www.juso.go.kr/addrlink/addrLinkApi.do'
@@ -359,7 +345,14 @@ def perform_address_search(search_data):
         'keyword': search_data,
     }
 
-    response = session.get(base_url, params=payload)
+    # Configure retries and timeout
+    retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[ 500, 502, 503, 504 ])
+    session = requests.Session()
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+
+    response = session.get(base_url, params=payload, timeout=(10, 1200))  # 커넥션 타임아웃과 리드 타임아웃 설정
 
     if response.status_code == 200:
         search_result = response.json()
@@ -370,7 +363,6 @@ def perform_address_search(search_data):
                 return [result.get('roadAddr', '') for result in result_data]
 
     return []
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)  
 
