@@ -2,7 +2,6 @@ import re
 import pandas as pd
 import requests
 from flask import Flask, jsonify, request
-import time
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 
@@ -333,8 +332,17 @@ def search():
         return jsonify(response_data)
 
 
+# Function to create a session with custom retry and timeout settings
+def create_session():
+    session = requests.Session()
+    retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[ 500, 502, 503, 504 ])
+    session.mount('http://', HTTPAdapter(max_retries=retries))
+    session.mount('https://', HTTPAdapter(max_retries=retries))
+    return session
 
 
+
+# Function to perform address search using the session with retries
 def perform_address_search(search_data):
     api_key = 'devU01TX0FVVEgyMDIzMDcyODE1MzkzNzExMzk3MzA='
     base_url = 'http://www.juso.go.kr/addrlink/addrLinkApi.do'
@@ -346,30 +354,22 @@ def perform_address_search(search_data):
         'resultType': 'json',
         'keyword': search_data,
     }
-    
-    MAX_RETRY = 5
-    RETRY_WAIT_SECONDS = 10
 
-    for retry_count in range(MAX_RETRY):
-        try:
-            # Configure retries and timeout
-            retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[ 500, 502, 503, 504 ])
-            session = requests.Session()
-            adapter = HTTPAdapter(max_retries=retries)
-            session.mount('http://', adapter)
-            session.mount('https://', adapter)
+    session = create_session()
 
-            response = session.get(base_url, params=payload, timeout=(10, 1200))  # 커넥션 타임아웃과 리드 타임아웃 설정
+    try:
+        response = session.get(base_url, params=payload, timeout=1200)
+        if response.status_code == 200:
+            search_result = response.json()
+            if 'results' in search_result and 'juso' in search_result['results']:
+                result_data = search_result['results']['juso']
+                if result_data:
+                    # Extract and return the road addresses from the API response
+                    return [result.get('roadAddr', '') for result in result_data]
+    except Exception as e:
+        print("An error occurred:", e)
 
-            if response.status_code == 200:
-                search_result = response.json()
-                if 'results' in search_result and 'juso' in search_result['results']:
-                    result_data = search_result['results']['juso']
-                    if result_data:
-                        # Extract and return the road addresses from the API response
-                        return [result.get('roadAddr', '') for result in result_data]
-
-            return []
+    return []
 
         except Exception as e:
             print(f"Error occurred, retrying in {RETRY_WAIT_SECONDS} seconds...")
