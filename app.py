@@ -2,6 +2,9 @@ import re
 import pandas as pd
 import requests
 from flask import Flask, jsonify, request
+import time
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 app = Flask(__name__)
 
@@ -343,19 +346,36 @@ def perform_address_search(search_data):
         'resultType': 'json',
         'keyword': search_data,
     }
+    
+    MAX_RETRY = 5
+    RETRY_WAIT_SECONDS = 10
 
-    response = requests.get(base_url, params=payload)
+    for retry_count in range(MAX_RETRY):
+        try:
+            # Configure retries and timeout
+            retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[ 500, 502, 503, 504 ])
+            session = requests.Session()
+            adapter = HTTPAdapter(max_retries=retries)
+            session.mount('http://', adapter)
+            session.mount('https://', adapter)
 
-    if response.status_code == 200:
-        search_result = response.json()
-        if 'results' in search_result and 'juso' in search_result['results']:
-            result_data = search_result['results']['juso']
-            if result_data:
-                # Extract and return the road addresses from the API response
-                return [result.get('roadAddr', '') for result in result_data]
+            response = session.get(base_url, params=payload, timeout=(10, 1200))  # 커넥션 타임아웃과 리드 타임아웃 설정
+
+            if response.status_code == 200:
+                search_result = response.json()
+                if 'results' in search_result and 'juso' in search_result['results']:
+                    result_data = search_result['results']['juso']
+                    if result_data:
+                        # Extract and return the road addresses from the API response
+                        return [result.get('roadAddr', '') for result in result_data]
+
+            return []
+
+        except Exception as e:
+            print(f"Error occurred, retrying in {RETRY_WAIT_SECONDS} seconds...")
+            time.sleep(RETRY_WAIT_SECONDS)
 
     return []
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)  
 
