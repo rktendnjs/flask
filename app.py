@@ -156,25 +156,6 @@ def remove_underground_numbers(column_value):
         return '답 없음 나와야 함'
     return column_value
 
-def check_address_inclusion(address1, address2):
-    # 도로명 추출 (동 앞의 내용에서 마지막 단어까지)
-    road1 = ' '.join(address1.split('(')[0].split()[:-1])
-    road2 = ' '.join(address2.split('(')[0].split()[:-1])
-    
-    # 동 추출 (괄호 내의 내용)
-    dong1 = address1.split('(')[-1].split(')')[0]
-    dong2 = address2.split('(')[-1].split(')')[0]
-    
-    # 번지 추출
-    bunji1 = address1.split('(')[0].split()[-1]
-    bunji2 = address2.split('(')[0].split()[-1]
-    
-    # 도로명과 동이 일치하는지 확인
-    if road1 == road2 and dong1 == dong2:
-        # 번지 부분을 비교하여 첫 번째 주소의 번지가 두 번째 주소의 번지에 포함되는지 확인
-        if bunji1 in bunji2:
-            return True
-    return False
 
 
 # TrieNode와 Trie 클래스
@@ -286,8 +267,21 @@ def create_mapping_tries(mapping_df):
 # Create the mapping tries
 eng_mapping_dict, kor_mapping_dict, eng_trie, kor_trie = create_mapping_tries(mapping_df)
     
+async def process_address_async(address, eng_mapping_dict, kor_mapping_dict, eng_trie, kor_trie):
+    formatted_address = address
+    formatted_address = add_space_to_korean_words(formatted_address)
+    formatted_address = add_space_to_uppercase_letters(formatted_address)
+    formatted_address = add_space_to_numbers(formatted_address)
+    formatted_address = remove_commas(formatted_address)
+    formatted_address = process_address_patterns(formatted_address)
+    result = convert_hybrid_words(formatted_address.strip())
+    result = replace_english_with_korean(result.strip())
+    result = remove_underground_numbers(result.strip())
+    result = process_address(result.strip(), eng_mapping_dict, kor_mapping_dict, eng_trie, kor_trie)
+    return result
+
 @app.route('/search', methods=['POST'])
-def search():
+async def search():
     try:
         if request.is_json:
             request_data = request.get_json()
@@ -295,59 +289,20 @@ def search():
             request_data = {'requestList': [{'seq': '000001', 'requestAddress': request.data.decode('utf-8')}]}
         
         request_list = request_data.get('requestList', [])
-
         results = []
 
-        for req in request_list:
+        async def process_request(req):
             seq = req.get('seq')
             address = req.get('requestAddress')
-
-            formatted_address = address
-            print("Original Address:", formatted_address)
-
-            formatted_address = add_space_to_korean_words(formatted_address)
-            print("After add_space_to_korean_words:", formatted_address)
-
-            formatted_address = add_space_to_uppercase_letters(formatted_address)
-            print("After add_space_to_uppercase_letters:", formatted_address)
-
-            formatted_address = add_space_to_numbers(formatted_address)
-            print("After add_space_to_numbers:", formatted_address)
-
-            formatted_address = remove_commas(formatted_address)
-            print("After remove_commas:", formatted_address)
-
-            # 패턴 매치 수행
-            formatted_address = process_address_patterns(formatted_address)
-            print("After process_address_patterns:", formatted_address)
-
-            result = convert_hybrid_words(formatted_address.strip())
-            print("After convert_hybrid_words:", result)
-
-            result = replace_english_with_korean(result.strip())  # 영어 단어 한글 변환 적용
-            print("After replace_english_with_korean:", result)
+            result_address = await asyncio.to_thread(perform_address_search, address)
             
-            result = remove_underground_numbers(result.strip())
-            print("remove_underground_numbers:", result)
-            
-            result = process_address(result.strip(), eng_mapping_dict, kor_mapping_dict, eng_trie, kor_trie)
-            print("process_address:", result)
-            
-
-
-            
-            # 주소 검색 결과 가져오기
-            result_address = perform_address_search(result)
-
-            if len(result_address) == 1:
-                results.append({'seq': seq, 'resultAddress': result_address[0]})
-            elif len(result_address) >= 2:
-                if check_address_inclusion(result_address[0], result_address[1]) == True:
-                    results.append({'seq': seq, 'resultAddress': result_address[0]})
-                else:
-                    results.append({'seq': seq, 'resultAddress': 'F'})
-            else:
+            if len(result_address) == 0:
                 results.append({'seq': seq, 'resultAddress': 'F'})
+            elif len(result_address) >= 1:
+                processed_address = await process_address_async(address, eng_mapping_dict, kor_mapping_dict, eng_trie, kor_trie)
+                results.append({'seq': seq, 'resultAddress': processed_address})
+
+        asyncio.run(asyncio.gather(*[process_request(req) for req in request_list]))
 
         response_data = {'HEADER': {'RESULT_CODE': 'S', 'RESULT_MSG': 'Success'}, 'BODY': results}
         return jsonify(response_data)
@@ -355,6 +310,23 @@ def search():
         response_data = {'HEADER': {'RESULT_CODE': 'F', 'RESULT_MSG': str(e)}}
         return jsonify(response_data)
 
+            
+
+
+            
+            # 주소 검색 결과 가져오기
+            result_address = perform_address_search(result)
+
+            if len(result_address) == 0:
+                results.append({'seq': seq, 'resultAddress': 'F'})
+            elif len(result_address) >= 1:
+                results.append({'seq': seq, 'resultAddress': result_address[0]})
+
+        response_data = {'HEADER': {'RESULT_CODE': 'S', 'RESULT_MSG': 'Success'}, 'BODY': results}
+        return jsonify(response_data)
+    except Exception as e:
+        response_data = {'HEADER': {'RESULT_CODE': 'F', 'RESULT_MSG': str(e)}}
+        return jsonify(response_data)
 
 
 # Function to create a session with custom retry and timeout settings
@@ -375,7 +347,7 @@ def perform_address_search(search_data):
     payload = {
         'confmKey': api_key,
         'currentPage': '1',
-        'countPerPage': '2',
+        'countPerPage': '10',
         'resultType': 'json',
         'keyword': search_data,
     }
@@ -400,3 +372,7 @@ def perform_address_search(search_data):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)  
+
+
+
+  
