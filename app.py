@@ -310,7 +310,6 @@ async def search():
         response_data = {'HEADER': {'RESULT_CODE': 'F', 'RESULT_MSG': str(e)}}
         return jsonify(response_data)
 
-
 # Function to create a session with custom retry and timeout settings
 def create_session():
     session = requests.Session()
