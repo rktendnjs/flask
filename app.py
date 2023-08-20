@@ -310,29 +310,11 @@ async def search():
         response_data = {'HEADER': {'RESULT_CODE': 'F', 'RESULT_MSG': str(e)}}
         return jsonify(response_data)
 
-            
-
-
-            
-            # 주소 검색 결과 가져오기
-            result_address = perform_address_search(result)
-
-            if len(result_address) == 0:
-                results.append({'seq': seq, 'resultAddress': 'F'})
-            elif len(result_address) >= 1:
-                results.append({'seq': seq, 'resultAddress': result_address[0]})
-
-        response_data = {'HEADER': {'RESULT_CODE': 'S', 'RESULT_MSG': 'Success'}, 'BODY': results}
-        return jsonify(response_data)
-    except Exception as e:
-        response_data = {'HEADER': {'RESULT_CODE': 'F', 'RESULT_MSG': str(e)}}
-        return jsonify(response_data)
-
 
 # Function to create a session with custom retry and timeout settings
 def create_session():
     session = requests.Session()
-    retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[ 500, 502, 503, 504 ])
+    retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
     session.mount('http://', HTTPAdapter(max_retries=retries))
     session.mount('https://', HTTPAdapter(max_retries=retries))
     return session
