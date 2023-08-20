@@ -371,11 +371,6 @@ def perform_address_search(search_data):
 
     return []
 
-        except Exception as e:
-            print(f"Error occurred, retrying in {RETRY_WAIT_SECONDS} seconds...")
-            time.sleep(RETRY_WAIT_SECONDS)
-
-    return []
 
 
 if __name__ == "__main__":
