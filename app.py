@@ -331,7 +331,7 @@ def search():
         print(json.dumps(response_data, ensure_ascii=False, indent=2))
     except Exception as e:
         response_data = {'HEADER': {'RESULT_CODE': 'F', 'RESULT_MSG': str(e)}}
-        print(json.dumps(response_data, ensure_ascii=False, indent=2)))
+        print(json.dumps(response_data, ensure_ascii=False, indent=2))
 
 
 # Function to create a session with custom retry and timeout settings
