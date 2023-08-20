@@ -1,9 +1,11 @@
 import re
 import pandas as pd
 import requests
+import json
 from flask import Flask, jsonify, request
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
+
 
 app = Flask(__name__)
 
@@ -267,21 +269,8 @@ def create_mapping_tries(mapping_df):
 # Create the mapping tries
 eng_mapping_dict, kor_mapping_dict, eng_trie, kor_trie = create_mapping_tries(mapping_df)
     
-async def process_address_async(address, eng_mapping_dict, kor_mapping_dict, eng_trie, kor_trie):
-    formatted_address = address
-    formatted_address = add_space_to_korean_words(formatted_address)
-    formatted_address = add_space_to_uppercase_letters(formatted_address)
-    formatted_address = add_space_to_numbers(formatted_address)
-    formatted_address = remove_commas(formatted_address)
-    formatted_address = process_address_patterns(formatted_address)
-    result = convert_hybrid_words(formatted_address.strip())
-    result = replace_english_with_korean(result.strip())
-    result = remove_underground_numbers(result.strip())
-    result = process_address(result.strip(), eng_mapping_dict, kor_mapping_dict, eng_trie, kor_trie)
-    return result
-
 @app.route('/search', methods=['POST'])
-async def search():
+def search():
     try:
         if request.is_json:
             request_data = request.get_json()
@@ -289,31 +278,66 @@ async def search():
             request_data = {'requestList': [{'seq': '000001', 'requestAddress': request.data.decode('utf-8')}]}
         
         request_list = request_data.get('requestList', [])
+
         results = []
 
-        async def process_request(req):
+        for req in request_list:
             seq = req.get('seq')
             address = req.get('requestAddress')
-            result_address = await asyncio.to_thread(perform_address_search, address)
-            
-            if len(result_address) == 0:
-                results.append({'seq': seq, 'resultAddress': 'F'})
-            elif len(result_address) >= 1:
-                processed_address = await process_address_async(address, eng_mapping_dict, kor_mapping_dict, eng_trie, kor_trie)
-                results.append({'seq': seq, 'resultAddress': processed_address})
 
-        asyncio.run(asyncio.gather(*[process_request(req) for req in request_list]))
+            formatted_address = address
+            
+
+            formatted_address = add_space_to_korean_words(formatted_address)
+            
+
+            formatted_address = add_space_to_uppercase_letters(formatted_address)
+            
+
+            formatted_address = add_space_to_numbers(formatted_address)
+            
+
+            formatted_address = remove_commas(formatted_address)
+            
+
+            # 패턴 매치 수행
+            formatted_address = process_address_patterns(formatted_address)
+            
+
+            result = convert_hybrid_words(formatted_address.strip())
+            
+
+            result = replace_english_with_korean(result.strip())  # 영어 단어 한글 변환 적용
+            
+            
+            result = remove_underground_numbers(result.strip())
+           
+            
+            result = process_address(result.strip(), eng_mapping_dict, kor_mapping_dict, eng_trie, kor_trie)
+        
+            
+
+
+            
+            # 주소 검색 결과 가져오기
+            result_address = perform_address_search(result)
+
+            if len(result_address) == 0:
+                results.append({'seq': seq, 'resultAddress': '답 없음'})
+            elif len(result_address) >= 1:
+                results.append({'seq': seq, 'resultAddress': result_address[0]})
 
         response_data = {'HEADER': {'RESULT_CODE': 'S', 'RESULT_MSG': 'Success'}, 'BODY': results}
-        return jsonify(response_data)
+        print(json.dumps(response_data, ensure_ascii=False, indent=2))
     except Exception as e:
         response_data = {'HEADER': {'RESULT_CODE': 'F', 'RESULT_MSG': str(e)}}
-        return jsonify(response_data)
+        print(json.dumps(response_data, ensure_ascii=False, indent=2)))
+
 
 # Function to create a session with custom retry and timeout settings
 def create_session():
     session = requests.Session()
-    retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
+    retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[ 500, 502, 503, 504 ])
     session.mount('http://', HTTPAdapter(max_retries=retries))
     session.mount('https://', HTTPAdapter(max_retries=retries))
     return session
