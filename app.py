@@ -328,12 +328,14 @@ def search():
                 results.append({'seq': seq, 'resultAddress': result_address[0]})
 
         response_data = {'HEADER': {'RESULT_CODE': 'S', 'RESULT_MSG': 'Success'}, 'BODY': results}
-        return jsonify(response_data)
         print(json.dumps(response_data, ensure_ascii=False, indent=2))
+        return jsonify(response_data)
+        
     except Exception as e:
         response_data = {'HEADER': {'RESULT_CODE': 'F', 'RESULT_MSG': str(e)}}
-        return jsonify(response_data)
         print(json.dumps(response_data, ensure_ascii=False, indent=2))
+        return jsonify(response_data)
+        
 
 
 # Function to create a session with custom retry and timeout settings
